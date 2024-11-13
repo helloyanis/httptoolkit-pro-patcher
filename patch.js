@@ -115,7 +115,7 @@ app.all('*', async (req, res) => {
               tierCode: 'pro',
               interval: 'annual',
               canManageSubscription: true,
-              updateBillingDetailsUrl: 'https://github.com/XielQs/httptoolkit-pro-patcher',
+              updateBillingDetailsUrl: 'https://github.com/IPTVmanreal/httptoolkit-pro-patcher',
             }
           })};user.subscription.expiry=new Date(user.subscription.expiry);` + patched
           data = patched
