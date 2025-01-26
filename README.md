@@ -1,12 +1,10 @@
-<h1 align="center">THIS SOFTWARE IS CURRENTLY IN THE PROCESS OF BEING MODIFIED TO WORK ON NEWER VERSIONS OF HTTP TOOLKIT, THIS IS CURRENTLY AN ARCHIVE OF A BROKEN VERSION</h1>
-
 <h1 align="center">HTTP Toolkit Pro Patcher</h1>
 
 This is a simple tool to patch HTTP Toolkit to enable the Pro features without a license or subscription. **But please consider supporting the developer by purchasing a license if you find the HTTP Toolkit useful.**
 
 ## Usage
 
-1. Clone this repository using `git clone https://github.com/IPTVmanreal/httptoolkit-pro-patcher.git`
+1. Clone this repository using `git clone https://github.com/XielQs/httptoolkit-pro-patcher.git`
 2. cd into the directory using `cd httptoolkit-pro-patcher`
 3. Run `npm install` or whatever package manager you use
 4. Run `node . patch` to patch the HTTP Toolkit
@@ -91,7 +89,7 @@ This project is for educational purposes only. I do not condone piracy or any il
 
 - [HTTP Toolkit](https://httptoolkit.com) for the awesome app
 - [Titoot](https://github.com/Titoot) for the creating the [httptoolkit-interceptor](https://github.com/Titoot/httptoolkit-interceptor)
-- [XielQ](https://github.com/XielQs) for the creator of the original patcher
+- [XielQ](https://github.com/XielQs) for the creator of this patcher
 
 ## ⭐️ Show Your Support
 

@@ -64,6 +64,8 @@ if (!fs.existsSync(path.join(appPath, 'app.asar'))) {
 
 console.log(chalk.blueBright`[+] HTTP Toolkit found at {bold ${appPath.match(/resources$/ig) ? path.dirname(appPath) : appPath}}`)
 
+const permissionErrorText = isMac && isSudo ? 'please check known issues in the README' : `try running ${!isWin ? 'with sudo' : 'node as administrator'}`
+
 const rm = (/** @type {string} */ dirPath) => {
   if (!fs.existsSync(dirPath)) return
   if (!fs.lstatSync(dirPath).isDirectory()) return fs.rmSync(dirPath, { force: true })
@@ -131,7 +133,7 @@ const patchApp = async () => {
   console.log(chalk.blueBright`[+] Started patching app...`)
 
   if (!canWrite(filePath)) {
-    console.error(chalk.redBright`[-] Insufficient permissions to write to {bold ${filePath}}, try running ${!isWin ? 'with sudo' : 'node as administrator'}`)
+    console.error(chalk.redBright`[-] Insufficient permissions to write to {bold ${filePath}}, ${permissionErrorText}`)
     process.exit(1)
   }
 
@@ -154,7 +156,7 @@ const patchApp = async () => {
     asar.extractAll(filePath, tempPath)
   } catch (e) {
     if (!isSudo && e.errno === -13) { //? Permission denied
-      console.error(chalk.redBright`[-] Permission denied, try running ${!isWin ? 'with sudo' : 'node as administrator'}`)
+      console.error(chalk.redBright`[-] Permission denied, ${permissionErrorText}`)
       process.exit(1)
     }
     console.error(chalk.redBright`[-] An error occurred while extracting app`, e)
@@ -192,7 +194,7 @@ const patchApp = async () => {
   console.log(chalk.greenBright`[+] Patched index.js`)
   console.log(chalk.yellowBright`[+] Installing dependencies...`)
   try {
-    const proc = spawn('npm install express axios', { cwd: tempPath, stdio: 'inherit', shell: true })
+    const proc = spawn('npm install express axios got-scraping', { cwd: tempPath, stdio: 'inherit', shell: true })
     activeProcesses.push(proc)
     await new Promise(resolve =>
       proc.on('close', resolve)
@@ -211,7 +213,7 @@ const patchApp = async () => {
   rm(tempPath)
   console.log(chalk.greenBright`[+] HTTP Toolkit patched successfully`)
   console.log(chalk.greenBright`[+] Restart HTTP Toolkit to apply changes`)
-  cleanUp(false)
+  await cleanUp(false)
 }
 
 switch (argv._[0]) {
@@ -230,7 +232,7 @@ switch (argv._[0]) {
       rm(path.join(os.tmpdir(), 'httptoolkit-patch'))
     } catch (e) {
       if (!isSudo && e.errno === -13) { //? Permission denied
-        console.error(chalk.redBright`[-] Permission denied, try running ${!isWin ? 'with sudo' : 'node as administrator'}`)
+        console.error(chalk.redBright`[-] Permission denied, ${permissionErrorText}`)
         process.exit(1)
       }
       console.error(chalk.redBright`[-] An error occurred`, e)
