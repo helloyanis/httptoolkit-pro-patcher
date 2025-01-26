@@ -35,11 +35,18 @@ const isMac = process.platform === 'darwin'
 
 //* why is there so many different paths, god damn
 const getAppPath = () => {
-  if (argv.path) return argv.path.endsWith(isMac ? '/Resources' : '/resources') ? argv.path : path.join(argv.path, isMac ? '/Resources' : '/resources')
-  if (isWin) return path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'httptoolkit', 'resources')
-  if (isMac) return '/Applications/HTTP Toolkit.app/Contents/Resources'
-  if (fs.existsSync('/opt/HTTP Toolkit/resources')) return '/opt/HTTP Toolkit/resources'
-  return '/opt/httptoolkit/resources'
+  if (argv.path) return argv.path.match(/resources$/ig) ? argv.path : path.join(argv.path, isMac ? '/Resources' : '/resources')
+  const paths = [
+    path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'httptoolkit', 'resources'), //* Windows
+    '/Applications/HTTP Toolkit.app/Contents/Resources', //* macOS
+    '/opt/HTTP Toolkit/resources', //* Linux
+    '/opt/httptoolkit/resources', //* Arch Linux
+    '/usr/lib/httptoolkit' //* Arch Linux (git)
+  ]
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p
+  }
+  return ''
 }
 
 const appPath = getAppPath()
@@ -55,13 +62,14 @@ if (!fs.existsSync(path.join(appPath, 'app.asar'))) {
   process.exit(1)
 }
 
-console.log(chalk.blueBright`[+] HTTP Toolkit found at {bold ${path.dirname(appPath)}}`)
+console.log(chalk.blueBright`[+] HTTP Toolkit found at {bold ${appPath.match(/resources$/ig) ? path.dirname(appPath) : appPath}}`)
 
 const rm = (/** @type {string} */ dirPath) => {
   if (!fs.existsSync(dirPath)) return
   if (!fs.lstatSync(dirPath).isDirectory()) return fs.rmSync(dirPath, { force: true })
   for (const entry of fs.readdirSync(dirPath)) {
     const entryPath = path.join(dirPath, entry)
+    if (!fs.existsSync(entryPath)) continue
     if (fs.lstatSync(entryPath).isDirectory()) rm(entryPath)
     else fs.rmSync(entryPath, { force: true })
   }
@@ -80,9 +88,12 @@ const canWrite = (/** @type {string} */ dirPath) => {
 const activeProcesses = []
 let isCancelled = false
 
-const cleanUp = async () => {
-  isCancelled = true
-  console.log(chalk.redBright`[-] Operation cancelled, cleaning up...`)
+/** @param {boolean} cancel */
+const cleanUp = async (cancel) => {
+  if (cancel) {
+    isCancelled = true
+    console.log(chalk.redBright`[-] Operation cancelled, cleaning up...`)
+  }
   if (activeProcesses.length) {
     console.log(chalk.yellowBright`[+] Killing active processes...`)
     for (const proc of activeProcesses) {
@@ -105,7 +116,7 @@ const cleanUp = async () => {
   } catch (e) {
     console.error(chalk.redBright`[-] An error occurred while cleaning up`, e)
   }
-  process.exit(1)
+  if (cancel) process.exit(1)
 }
 
 const patchApp = async () => {
@@ -134,10 +145,12 @@ const patchApp = async () => {
 
   console.log(chalk.yellowBright`[+] Extracting app...`)
 
-  ;['SIGINT', 'SIGTERM'].forEach(signal => process.on(signal, cleanUp))
+  ;['SIGINT', 'SIGTERM'].forEach(signal => process.on(signal, () => cleanUp(true)))
 
   try {
     rm(tempPath)
+    if (fs.existsSync(tempPath)) fs.rmSync(tempPath, { recursive: true })
+    fs.mkdirSync(tempPath)
     asar.extractAll(filePath, tempPath)
   } catch (e) {
     if (!isSudo && e.errno === -13) { //? Permission denied
@@ -151,10 +164,10 @@ const patchApp = async () => {
   const indexPath = path.join(tempPath, 'build', 'index.js')
   if (!fs.existsSync(indexPath)) {
     console.error(chalk.redBright`[-] Index file not found`)
-    await cleanUp()
+    await cleanUp(true)
   }
   const data = fs.readFileSync(indexPath, 'utf-8')
-  ;['SIGINT', 'SIGTERM'].forEach(signal => process.off(signal, cleanUp))
+  ;['SIGINT', 'SIGTERM'].forEach(signal => process.off(signal, () => cleanUp(true)))
   const { email } = await prompts({
     type: 'text',
     name: 'email',
@@ -163,16 +176,16 @@ const patchApp = async () => {
   })
   if (!email || typeof email !== 'string') {
     console.error(chalk.redBright`[-] Email not provided`)
-    await cleanUp()
+    await cleanUp(true)
   }
-  ;['SIGINT', 'SIGTERM'].forEach(signal => process.on(signal, cleanUp))
+  ;['SIGINT', 'SIGTERM'].forEach(signal => process.on(signal, () => cleanUp(true)))
   const patch = fs.readFileSync('patch.js', 'utf-8')
   const patchedData = data
     .replace('const APP_URL =', `// ------- Injected by HTTP Toolkit Patcher -------\nconst email = \`${email.replace(/`/g, '\\`')}\`\nconst globalProxy = process.env.PROXY ?? \`${globalProxy ? globalProxy.replace(/`/g, '\\`') : ''}\`\n${patch}\n// ------- End patched content -------\nconst APP_URL =`)
 
   if (data === patchedData || !patchedData) {
     console.error(chalk.redBright`[-] Patch failed`)
-    await cleanUp()
+    await cleanUp(true)
   }
 
   fs.writeFileSync(indexPath, patchedData, 'utf-8')
@@ -188,7 +201,7 @@ const patchApp = async () => {
     if (isCancelled) return
   } catch (e) {
     console.error(chalk.redBright`[-] An error occurred while installing dependencies`, e)
-    await cleanUp()
+    await cleanUp(true)
   }
   rm(path.join(tempPath, 'package-lock.json'))
   fs.copyFileSync(filePath, `${filePath}.bak`)
@@ -197,6 +210,8 @@ const patchApp = async () => {
   await asar.createPackage(tempPath, filePath)
   rm(tempPath)
   console.log(chalk.greenBright`[+] HTTP Toolkit patched successfully`)
+  console.log(chalk.greenBright`[+] Restart HTTP Toolkit to apply changes`)
+  cleanUp(false)
 }
 
 switch (argv._[0]) {
@@ -224,6 +239,7 @@ switch (argv._[0]) {
     break
   case 'start':
     console.log(chalk.blueBright`[+] Starting HTTP Toolkit...`)
+    if (isSudo) console.warn(chalk.yellowBright`[!] Warning: Running with sudo may cause issues`)
     try {
       const command =
         isWin ? `"${path.resolve(appPath, '..', 'HTTP Toolkit.exe')}"`
